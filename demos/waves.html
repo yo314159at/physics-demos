@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waves and Superposition</title>
+<script>/* apply saved theme before first paint (no flash) */(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../css/site.css">
+<script src="../js/site.js" defer></script>
+<script src="../js/sim.js" defer></script>
+<!-- Catalog metadata, read by site_tools.py (index) and site.js (title).
+     topic: mechanics|waves|optics|electricity|magnetism|thermodynamics|fluids|modern|astronomy   level: high-school|intro-uni -->
+<script type="application/json" id="demo-meta">
+{
+  "id": "waves",
+  "title": "Waves and Superposition",
+  "summary": "Drag a wave's amplitude and wavelength, add a second wave, probe ψ(x₀, t) and ψ(x, t₀). Standing waves and beats in one tap.",
+  "topic": "waves",
+  "level": "high-school",
+  "order": 10
+}
+</script>
+</head>
+<body class="demo">
+
+<div id="more" hidden>
+  <section data-title="Predict first" data-icon="ph-question">
+    <p class="predict-q">Two identical waves travel toward each other along a string. What does the string look like when they overlap? Are there points that never move?</p>
+    <details class="reveal"><summary>Show the answer</summary>
+      <p>A standing wave. The pattern stops travelling and the string oscillates in place. Points called nodes, spaced half a wavelength apart, never move; between them are antinodes with twice the single-wave amplitude.</p></details>
+  </section>
+  <section data-title="What to notice" data-icon="ph-eye">
+    <ul>
+      <li>The dots (small pieces of the string) only move up and down. The <em>pattern</em> travels, not the material.</li>
+      <li>The snapshot graph $\psi(x)$ and the time graph $\psi(x_0,t)$ have the same shape, one against position and the other against time. The wave speed links their scales.</li>
+      <li>Where the snapshot is steepest the dot moves fastest. For a single wave, the string-velocity graph is the slope graph times $-v$.</li>
+      <li>Choose <em>Standing</em> and drag probe $x_0$: it snaps to quarter-wavelengths. At odd multiples it stays at zero (a node).</li>
+    </ul>
+    <div class="callout misconception"><strong>Common mistake.</strong> The string does not travel along with the wave. Each point oscillates around its own position; only the shape moves.</div>
+  </section>
+  <section data-title="The physics" data-icon="ph-function">
+    <p>A sinusoidal wave moving right with amplitude $A$, wavenumber $k=2\pi/\lambda$ and angular frequency $\omega=2\pi f$:</p>
+    $$\psi(x,t)=A\cos(kx-\omega t+\varphi),\qquad v=\frac{\omega}{k}=\lambda f$$
+    <p>In a medium where the speed does not depend on frequency, waves add (superposition). Two equal waves in opposite directions give a standing wave, and two nearby frequencies give beats:</p>
+    $$\psi=2A\cos(kx)\cos(\omega t),\qquad f_\text{beat}=|f_1-f_2|$$
+    <p>Both waves share one medium, so the wavelength follows from the speed and the frequency: $\lambda=v/f$. That is why dragging the wavelength bracket changes the frequency.</p>
+  </section>
+  <section data-title="Try this" data-icon="ph-flag">
+    <ol>
+      <li>Choose <em>Standing</em>. Find two neighbouring nodes with the probe. How far apart are they compared with $\lambda$?</li>
+      <li>Choose <em>Beats</em> and read the beat period from the $\psi(x_0,t)$ graph.</li>
+      <li>Drag the wavelength handle to double the frequency at fixed wave speed. What happens to the wavelength?</li>
+      <li>Open the Envelope graph for each preset. What does it show for a single wave, and for a standing wave?</li>
+    </ol>
+  </section>
+</div>
+
+<div class="app">
+  <aside class="dock left" id="settings" data-dock="settings" data-label="Settings" data-icon="ph-sliders-horizontal" data-open="false">
+    <div class="dock-head"><h3>Settings</h3></div>
+    <div class="dock-body"><div id="controls"></div><p class="ctl-hint">Tip: the circles on the stage drag amplitude, wavelength and the probes.</p></div>
+  </aside>
+
+  <section class="stage-wrap">
+    <div class="stage" role="img" aria-label="Wave on a string with draggable amplitude, wavelength and probes">
+      <canvas id="stage"></canvas>
+      <div id="readouts" class="stage-readouts"></div>
+      <div id="tools" class="stage-tools"></div>
+    </div>
+    <div id="playbar"></div>
+  </section>
+
+  <aside class="dock right" id="graphdock" data-dock="graphs" data-label="Graphs" data-icon="ph-chart-line-up" data-open="true"></aside>
+</div>
+
+<script>
+/* Direct manipulation: drag amplitude and wavelength handles, drag the probes. Presets for standing waves and beats. */
+document.addEventListener('DOMContentLoaded', () => {
+  const { Sim } = window;
+  const TAU = Sim.TAU, XMIN = -6, XMAX = 6, PADX = 48, TOP = 96, BOTTOM = 112, XS = XMIN + 0.5;
+  let tl = null;
+  let dragged = false;
+
+  const cv = Sim.canvas(document.getElementById('stage'), { onResize: () => { if (tl) tl.redraw(); } });
+
+  const ctl = Sim.controls(document.getElementById('controls'), [
+    { type: 'slider', id: 'v',  label: 'Wave speed (medium)', min: 0.5, max: 4, step: 0.1, value: 1.5, unit: 'm/s' },
+    { type: 'heading', label: 'Wave 1 (moves right)' },
+    { type: 'slider', id: 'A1', label: 'Amplitude', min: 0.1, max: 1, step: 0.05, value: 0.6, unit: 'm' },
+    { type: 'slider', id: 'f1', label: 'Frequency', min: 0.1, max: 2, step: 0.01, value: 0.5, unit: 'Hz' },
+    { type: 'slider', id: 'p1', label: 'Phase', min: 0, max: 360, step: 5, value: 0, unit: '°' },
+    { type: 'heading', label: 'Wave 2' },
+    { type: 'toggle', id: 'w2', label: 'Add a second wave', value: false },
+    { type: 'select', id: 'd2', label: 'Direction', value: 'left', options: [{ value: 'left', label: '← Moves left' }, { value: 'right', label: '→ Moves right' }] },
+    { type: 'slider', id: 'A2', label: 'Amplitude', min: 0.1, max: 1, step: 0.05, value: 0.6, unit: 'm' },
+    { type: 'slider', id: 'f2', label: 'Frequency', min: 0.1, max: 2, step: 0.01, value: 0.5, unit: 'Hz' },
+    { type: 'slider', id: 'p2', label: 'Phase', min: 0, max: 360, step: 5, value: 0, unit: '°' },
+    { type: 'heading', label: 'Probes and display' },
+    { type: 'slider', id: 'x0', label: 'Probe x₀', min: XMIN, max: XMAX, step: 0.01, value: 0, unit: 'm' },
+    { type: 'slider', id: 'x1', label: 'Probe x₁', min: XMIN, max: XMAX, step: 0.01, value: 1, unit: 'm' },
+    { type: 'toggle', id: 'comps', label: 'Show component waves', value: true },
+    { type: 'toggle', id: 'dots', label: 'Show string particles', value: true }
+  ], () => { enable(); tools.refresh(); tl.recompute(); });
+  const enable = () => ['d2', 'A2', 'f2', 'p2'].forEach((id) => ctl.setEnabled(id, ctl.values.w2));
+  enable();
+
+  const preset = () => {
+    const c = ctl.values;
+    if (!c.w2) return 'single';
+    if (c.d2 === 'left' && Math.abs(c.f1 - c.f2) < 1e-6) return 'standing';
+    return c.d2 === 'right' && c.f1 !== c.f2 ? 'beats' : '';
+  };
+  const tools = Sim.toolbar(document.getElementById('tools'), [
+    { type: 'segment', label: 'Waves', value: preset, onChange: (v) => {
+        const c = ctl.values;
+        if (v === 'single') ctl.set('w2', false);
+        else { ctl.set('w2', true); ctl.set('A2', c.A1); ctl.set('p2', c.p1); ctl.set('d2', v === 'standing' ? 'left' : 'right'); ctl.set('f2', v === 'standing' ? c.f1 : Math.min(2, c.f1 + 0.1)); }
+        enable(); tl.recompute();
+      },
+      options: [{ value: 'single', label: 'Single wave', icon: 'ph-wave-sine' }, { value: 'standing', label: 'Standing', icon: 'ph-arrows-left-right' }, { value: 'beats', label: 'Beats', icon: 'ph-waveform' }] }
+  ]);
+
+  const ro = Sim.readouts(document.getElementById('readouts'), [
+    { id: 'lam', label: 'Wavelength λ₁' }, { id: 'f', label: 'Frequency f₁' }, { id: 'v', label: 'Speed v' }, { id: 'psi', label: 'ψ(x₀, t)' }
+  ]);
+
+  /* Both waves obey the same medium: wavelength = v / f. */
+  const comps = () => {
+    const c = ctl.values, out = [{ A: c.A1, k: TAU * c.f1 / c.v, w: TAU * c.f1, ph: c.p1 * Math.PI / 180, dir: 1 }];
+    if (c.w2) out.push({ A: c.A2, k: TAU * c.f2 / c.v, w: TAU * c.f2, ph: c.p2 * Math.PI / 180, dir: c.d2 === 'left' ? -1 : 1 });
+    return out;
+  };
+  const th = (c, x, t) => c.k * x - c.dir * c.w * t + c.ph;
+  const psi = (c, x, t) => c.A * Math.cos(th(c, x, t));
+  const psiT = (c, x, t) => c.A * c.dir * c.w * Math.sin(th(c, x, t));     // ∂ψ/∂t
+  const psiX = (c, x, t) => -c.A * c.k * Math.sin(th(c, x, t));            // ∂ψ/∂x
+  const sum = (f, x, t) => comps().reduce((s, c) => s + f(c, x, t), 0);
+  const S = () => Math.max(0.3, comps().reduce((s, c) => s + c.A, 0) * 1.1);   // shared y scale (m)
+  const XSAMP = Array.from({ length: 301 }, (_, i) => XMIN + (XMAX - XMIN) * i / 300);
+  const along = (f) => XSAMP.map((x) => [x, f(x)]);
+
+  /* stage geometry (canvas px): the handles live in pixel space */
+  const X = (x) => PADX + (x - XMIN) / (XMAX - XMIN) * (cv.w - 2 * PADX);
+  const XW = (px) => XMIN + (px - PADX) / (cv.w - 2 * PADX) * (XMAX - XMIN);
+  const cy = () => TOP + (cv.h - TOP - BOTTOM) / 2;
+  const ys = () => Math.max(8, ((cv.h - TOP - BOTTOM) / 2 - 4) / S());
+  const lam = (i) => { const c = comps()[i]; return c ? TAU / c.k : 1; };
+  const yb = (i) => cv.h - 30 - 36 * i;                                     // wavelength bracket rows
+
+  const mkAmp = (i, id, color, xw) => ({
+    id: 'amp' + i, color, radius: 12, hidden: () => i === 1 && !ctl.values.w2,
+    pos: () => [X(xw), cy() - ctl.values['A' + (i + 1)] * ys()],
+    label: () => `A${i ? '₂' : '₁'} = ${ctl.values['A' + (i + 1)].toFixed(2)} m`,
+    onStart: () => { dragged = true; },
+    onDrag: (x, y) => { ctl.set(id, Sim.clamp(Math.round((cy() - y) / ys() * 20) / 20, 0.1, 1)); tools.refresh(); tl.recompute(); }
+  });
+  const mkLam = (i, fid, color) => ({
+    id: 'lam' + i, color, radius: 12, hidden: () => i === 1 && !ctl.values.w2,
+    pos: () => [X(XS + Math.min(lam(i), XMAX - XS)), yb(i)],
+    label: () => `λ${i ? '₂' : '₁'} = ${lam(i).toFixed(2)} m   f = ${ctl.values[fid].toFixed(2)} Hz`,
+    onStart: () => { dragged = true; },
+    onDrag: (x) => {
+      const L = Sim.clamp(XW(x) - XS, ctl.values.v / 2, XMAX - XS);          // wavelength -> frequency at fixed speed
+      ctl.set(fid, Sim.clamp(Math.round(ctl.values.v / L * 100) / 100, 0.1, 2)); tools.refresh(); tl.recompute();
+    }
+  });
+  const mkProbe = (id, color) => ({
+    id, color, radius: 11, pos: () => [X(ctl.values[id]), 84],
+    label: () => `${id === 'x0' ? 'x₀' : 'x₁'} = ${ctl.values[id].toFixed(2)} m`,
+    onStart: () => { dragged = true; },
+    onDrag: (x) => { ctl.set(id, Sim.clamp(Sim.snap(XW(x), lam(0) / 4, 0.06), XMIN, XMAX)); tl.recompute(); }   // snaps to nodes/antinodes
+  });
+  const handles = Sim.handles(cv, [
+    mkAmp(0, 'A1', '--c2', XMIN + 0.6), mkLam(0, 'f1', '--c2'),
+    mkAmp(1, 'A2', '--c3', XMAX - 0.6), mkLam(1, 'f2', '--c3'),
+    mkProbe('x0', '--c4'), mkProbe('x1', '--c5')
+  ], { redraw: () => tl.redraw() });
+
+  /* ANALYTIC timeline: nothing to integrate, the state is just t. */
+  tl = Sim.timeline({
+    duration: 10,
+    at: () => ({}),
+    draw: (_s, t) => {
+      const { ctx, w, h } = cv, y0 = cy(), sc = ys(), Yv = (v) => y0 - v * sc, cs = comps();
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = Sim.css('--sim-grid'); ctx.fillStyle = Sim.css('--muted'); ctx.lineWidth = 1.5;
+      ctx.font = `12px ${Sim.css('--mono')}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (let x = XMIN; x <= XMAX; x += 1) { ctx.beginPath(); ctx.moveTo(X(x), y0 - 5); ctx.lineTo(X(x), y0 + 5); ctx.stroke(); if (x % 2 === 0) ctx.fillText(x + ' m', X(x), y0 + 10); }
+      ctx.beginPath(); ctx.moveTo(PADX, y0); ctx.lineTo(w - PADX, y0); ctx.stroke();
+      const line = (f, col, wd, dash) => {
+        ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.setLineDash(dash || []); ctx.lineJoin = 'round'; ctx.beginPath();
+        XSAMP.forEach((x, i) => (i ? ctx.lineTo(X(x), Yv(f(x))) : ctx.moveTo(X(x), Yv(f(x))))); ctx.stroke(); ctx.setLineDash([]);
+      };
+      if (ctl.values.comps && cs.length > 1) cs.forEach((c, i) => line((x) => psi(c, x, t), Sim.alpha(Sim.css(i ? '--c3' : '--c2'), .85), 2, [6, 5]));
+      line((x) => sum(psi, x, t), Sim.css('--c1'), 4);
+      if (ctl.values.dots) {
+        ctx.fillStyle = Sim.css('--c1');
+        for (let x = XMIN; x <= XMAX + 1e-9; x += 0.25) { ctx.beginPath(); ctx.arc(X(x), Yv(sum(psi, x, t)), 3.4, 0, TAU); ctx.fill(); }
+      }
+      [['x0', '--c4'], ['x1', '--c5']].forEach(([id, col]) => {                      // probes: line + marker on the string
+        const x = ctl.values[id], c = Sim.css(col);
+        ctx.strokeStyle = Sim.alpha(c, .75); ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(X(x), 84); ctx.lineTo(X(x), h - BOTTOM + 20); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(X(x), Yv(sum(psi, x, t)), 7, 0, TAU); ctx.fillStyle = c; ctx.fill(); ctx.strokeStyle = Sim.css('--surface'); ctx.lineWidth = 2; ctx.stroke();
+      });
+      cs.forEach((c, i) => {                                                          // amplitude bars and wavelength brackets
+        const col = Sim.css(i ? '--c3' : '--c2'), bx = X(i ? XMAX - 0.6 : XMIN + 0.6), by = yb(i), x0 = X(XS), x1 = X(XS + Math.min(TAU / c.k, XMAX - XS));
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(bx, y0); ctx.lineTo(bx, Yv(c.A)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx - 7, Yv(-c.A)); ctx.lineTo(bx + 7, Yv(-c.A)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x0, by); ctx.lineTo(x1, by); ctx.moveTo(x0, by - 8); ctx.lineTo(x0, by + 8); ctx.stroke();
+        ctx.fillStyle = col; ctx.font = `600 13px ${Sim.css('--mono')}`; ctx.textBaseline = 'bottom'; ctx.textAlign = 'center';
+        ctx.fillText(`λ${i ? '₂' : '₁'} = ${(TAU / c.k).toFixed(2)} m`, (x0 + x1) / 2, by - 8);
+      });
+      if (!dragged) {
+        ctx.fillStyle = Sim.css('--muted'); ctx.font = `500 14px ${Sim.css('--font')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText('drag the circles: height = amplitude, bracket = wavelength, top = probes', X(XMIN + 3.4), yb(0) - 18);
+      }
+      handles.draw(ctx);
+      const c1 = cs[0];
+      ro.set('lam', Sim.fmt(TAU / c1.k, 2) + ' m'); ro.set('f', Sim.fmt(c1.w / TAU, 2) + ' Hz');
+      ro.set('v', Sim.fmt(ctl.values.v, 1) + ' m/s'); ro.set('psi', Sim.fmt(sum(psi, ctl.values.x0, t), 3) + ' m');
+    }
+  });
+  tl.recompute();
+  Sim.playbar(document.getElementById('playbar'), tl);
+
+  const dock = Sim.graphDock(document.getElementById('graphdock'));
+  const yr = () => [-S(), S()];
+
+  /* 1. Snapshot in SPACE at the current time (custom data, redrawn by the timeline) */
+  const snap = dock.graphCard({
+    title: 'Snapshot ψ(x, t) at the current time', short: 'ψ(x)', icon: 'ph-wave-sine', xName: 'x', xUnit: 'm', yUnit: 'm', xLabel: 'x (m)', yLabel: 'ψ (m)', yRange: yr, xRange: [XMIN, XMAX],
+    series: [
+      { name: 'ψ total', color: '--c1', data: () => along((x) => sum(psi, x, tl.t)) },
+      { name: 'ψ₁', color: '--c2', visible: false, data: () => along((x) => psi(comps()[0], x, tl.t)) },
+      { name: 'ψ₂', color: '--c3', visible: false, data: () => (ctl.values.w2 ? along((x) => psi(comps()[1], x, tl.t)) : []) },
+      { name: 'ψ(x, 0)', color: '--muted', fill: false, dash: [5, 4], width: 1.5, data: () => along((x) => sum(psi, x, 0)) }
+    ]
+  });
+  tl.onChange(() => snap.graph.draw());
+
+  /* 2. Oscillation in TIME at the two probes (playhead, tooltip, click-to-scrub) */
+  dock.timeGraph(tl, { title: 'Oscillation ψ(x₀, t) and ψ(x₁, t)', short: 'ψ(t)', icon: 'ph-pulse', yLabel: 'ψ (m)', yUnit: 'm', yRange: yr,
+    series: [
+      { name: 'ψ(x₀, t)', color: '--c4', y: (_s, t) => sum(psi, ctl.values.x0, t) },
+      { name: 'ψ(x₁, t)', color: '--c5', y: (_s, t) => sum(psi, ctl.values.x1, t), fill: false },
+      { name: 'wave 1 at x₀', color: '--c2', visible: false, y: (_s, t) => psi(comps()[0], ctl.values.x0, t) },
+      { name: 'wave 2 at x₀', color: '--c3', visible: false, y: (_s, t) => (ctl.values.w2 ? psi(comps()[1], ctl.values.x0, t) : 0) }
+    ] });
+
+  /* 3. Medium velocity and slope along the string: for a single wave, ∂ψ/∂t = −v ∂ψ/∂x */
+  const snap2 = dock.graphCard({
+    title: 'String velocity ∂ψ/∂t and slope ∂ψ/∂x', short: 'Velocity', icon: 'ph-arrow-up-right', xName: 'x', xUnit: 'm', xLabel: 'x (m)', xRange: [XMIN, XMAX], symmetric: true, visible: false,
+    series: [
+      { name: '∂ψ/∂t (m/s)', color: '--c4', data: () => along((x) => sum(psiT, x, tl.t)) },
+      { name: '∂ψ/∂x (m/m)', color: '--c5', visible: false, data: () => along((x) => sum(psiX, x, tl.t)) }
+    ]
+  });
+  tl.onChange(() => snap2.graph.draw());
+
+  /* 4. Envelope: the largest |ψ| each point reaches over the whole run. Flat for a travelling wave, nodes and antinodes for a standing wave. */
+  let env = [];
+  const buildEnv = () => { env = XSAMP.map((x) => { let m = 0; for (let i = 0; i <= 200; i++) m = Math.max(m, Math.abs(sum(psi, x, tl.duration * i / 200))); return [x, m]; }); };
+  buildEnv();
+  const envCard = dock.graphCard({
+    title: 'Envelope: largest |ψ| over the run', short: 'Envelope', icon: 'ph-arrows-out-line-vertical', xName: 'x', xUnit: 'm', yUnit: 'm', xLabel: 'x (m)', yLabel: 'max |ψ| (m)', xRange: [XMIN, XMAX], yMin: 0, visible: false,
+    series: [{ name: 'max |ψ|', color: '--c5', data: () => env }]
+  });
+  tl.onChange((kind) => { if (kind === 'recompute') { buildEnv(); envCard.graph.draw(); } });
+});
+</script>
+</body>
+</html>

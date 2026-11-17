@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mass on a Spring</title>
+<script>/* apply saved theme before first paint (no flash) */(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../css/site.css">
+<script src="../js/site.js" defer></script>
+<script src="../js/sim.js" defer></script>
+<!-- Catalog metadata, read by site_tools.py (index) and site.js (title).
+     topic: mechanics|waves|optics|electricity|magnetism|thermodynamics|fluids|modern|astronomy   level: high-school|intro-uni -->
+<script type="application/json" id="demo-meta">
+{
+  "id": "spring-mass",
+  "title": "Mass on a Spring",
+  "summary": "Grab the block, pull, let go. Watch energy swap between motion and spring, and the phase portrait spiral in with damping.",
+  "topic": "mechanics",
+  "level": "high-school",
+  "order": 20
+}
+</script>
+</head>
+<body class="demo">
+
+<div id="more" hidden>
+  <section data-title="Predict first" data-icon="ph-question">
+    <p class="predict-q">If you double the mass, does the block oscillate faster or slower? What if you double the spring stiffness? Does the starting stretch change the period?</p>
+    <details class="reveal"><summary>Show the answer</summary>
+      <p>Doubling $m$ slows it down (period × $\sqrt2$). Doubling $k$ speeds it up (period ÷ $\sqrt2$). The starting stretch does not change the period.</p></details>
+  </section>
+  <section data-title="What to notice" data-icon="ph-eye">
+    <ul>
+      <li>Kinetic and spring energy trade places, but with no damping their sum stays constant.</li>
+      <li>The phase portrait (velocity against position) is an ellipse without damping and a spiral with damping.</li>
+      <li>With damping the total energy decays and the swings shrink, yet the period hardly changes.</li>
+    </ul>
+    <div class="callout misconception"><strong>Common mistake.</strong> A bigger starting stretch does not make each swing take longer: the force is larger and the distance is longer, and the two effects cancel.</div>
+  </section>
+  <section data-title="The physics" data-icon="ph-function">
+    <p>The spring pulls back with force $F=-kx$. Newton's second law, with a damping force $-bv$, gives:</p>
+    $$m\ddot x=-kx-b\dot x,\qquad T=2\pi\sqrt{\frac{m}{k}}\ (b=0),\qquad E=\tfrac12 m v^2+\tfrac12 k x^2$$
+    <p>The period depends only on $m$ and $k$, not on the amplitude. The simulation integrates the equation numerically with a fourth-order Runge–Kutta method, so the energy does not drift.</p>
+  </section>
+  <section data-title="Try this" data-icon="ph-flag">
+    <ol>
+      <li>Set damping to <em>None</em>, $m=1$ kg, $k=25$ N/m. Read the period, then predict it for $m=4$ kg before changing it.</li>
+      <li>Switch to <em>Heavy</em> damping. Does the block still oscillate?</li>
+      <li>Open the Forces graph and find the moments when the spring force is zero. What is the velocity there?</li>
+      <li>Grab the block while it is moving. What does the phase portrait do?</li>
+    </ol>
+  </section>
+</div>
+
+<div class="app">
+  <aside class="dock left" id="settings" data-dock="settings" data-label="Settings" data-icon="ph-sliders-horizontal" data-open="false">
+    <div class="dock-head"><h3>Settings</h3></div>
+    <div class="dock-body"><div id="controls"></div><p class="ctl-hint">Tip: you can also grab the block on the stage.</p></div>
+  </aside>
+
+  <section class="stage-wrap">
+    <div class="stage" role="img" aria-label="Block on a spring: grab and release">
+      <canvas id="stage"></canvas>
+      <div id="readouts" class="stage-readouts"></div>
+      <div id="tools" class="stage-tools"></div>
+    </div>
+    <div id="playbar"></div>
+  </section>
+
+  <aside class="dock right" id="graphdock" data-dock="graphs" data-label="Graphs" data-icon="ph-chart-line-up" data-open="true"></aside>
+</div>
+
+<script>
+/* Direct manipulation: grab the block, pull, let go. Settings sliders mirror it. */
+document.addEventListener('DOMContentLoaded', () => {
+  const { Sim } = window;
+  let tl = null;                                  // declared first (callbacks can fire before assignment)
+  const WALL = 36, BLOCK = 76, XMAX = 0.6;        // px, px, world half-width (m)
+  let dragged = false;
+
+  const cv = Sim.canvas(document.getElementById('stage'), { onResize: () => { if (tl) tl.redraw(); } });
+  const eq = () => cv.w / 2, scale = () => (cv.w / 2 - WALL - BLOCK / 2 - 20) / XMAX, cy = () => cv.h * 0.52;
+
+  const ctl = Sim.controls(document.getElementById('controls'), [
+    { type: 'slider', id: 'm',  label: 'Mass', min: 0.2, max: 4, step: 0.1, value: 1, unit: 'kg' },
+    { type: 'slider', id: 'k',  label: 'Spring stiffness', min: 5, max: 60, step: 1, value: 25, unit: 'N/m' },
+    { type: 'slider', id: 'b',  label: 'Damping', min: 0, max: 3, step: 0.05, value: 0, unit: 'kg/s' },
+    { type: 'slider', id: 'x0', label: 'Starting stretch', min: -0.5, max: 0.5, step: 0.01, value: 0.4, unit: 'm' }
+  ], () => { tools.refresh(); updateStatic(); tl.recompute(); });
+
+  const dampLevel = () => { const b = ctl.values.b; return b === 0 ? 'none' : b <= 0.5 ? 'light' : 'heavy'; };
+  const tools = Sim.toolbar(document.getElementById('tools'), [
+    { type: 'segment', label: 'Damping', value: dampLevel, onChange: (v) => { ctl.set('b', { none: 0, light: 0.3, heavy: 1.5 }[v]); tl.recompute(); },
+      options: [{ value: 'none', label: 'No damping' }, { value: 'light', label: 'Light' }, { value: 'heavy', label: 'Heavy' }] }
+  ]);
+
+  const ro = Sim.readouts(document.getElementById('readouts'), [
+    { id: 'T', label: 'Period (no damping)' }, { id: 'x', label: 'Position x' }, { id: 'v', label: 'Velocity v' }, { id: 'E', label: 'Total energy' }
+  ]);
+  const updateStatic = () => ro.set('T', Sim.fmt(2 * Math.PI * Math.sqrt(ctl.values.m / ctl.values.k), 3) + ' s');
+
+  /* The block is the handle: it follows the simulated position, so you can grab it mid-swing. */
+  const handles = Sim.handles(cv, [{
+    id: 'block', color: '--c1', radius: 17,
+    pos: () => [eq() + (tl ? tl.state().x : ctl.values.x0) * scale(), cy()],   // tl is still null during the timeline's first draw
+    label: () => `x = ${ctl.values.x0.toFixed(2)} m`,
+    onStart: () => { tl.pause(); dragged = true; },
+    onDrag: (x) => {
+      ctl.set('x0', Sim.clamp(Sim.snap((x - eq()) / scale(), 0.1, 0.012), -0.5, 0.5));
+      tl.recompute(); tl.seek(0);
+    },
+    onEnd: () => tl.play()                        // let go = release the spring
+  }], { redraw: () => tl.redraw() });
+
+  /* NUMERIC timeline: init + step (RK4). The whole 12 s run is computed on every parameter change,
+     stored 60 times per second, then played back or scrubbed. */
+  tl = Sim.timeline({
+    duration: 12, dt: 1 / 240, every: 4,
+    init: () => ({ x: ctl.values.x0, v: 0 }),
+    step: (s, dt, t) => {
+      const { m, k, b } = ctl.values;
+      const [x, v] = Sim.rk4((_t, y) => [y[1], (-k * y[0] - b * y[1]) / m], [s.x, s.v], t, dt);
+      s.x = x; s.v = v;
+    },
+    draw: (s) => {
+      const { ctx, w, h } = cv, { m, k } = ctl.values, e = eq(), sc = scale(), y0 = cy(), bx = e + s.x * sc, bt = y0 - BLOCK / 2;
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = Sim.css('--sim-grid'); ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);        // equilibrium marker
+      ctx.beginPath(); ctx.moveTo(e, y0 - 110); ctx.lineTo(e, y0 + BLOCK / 2 + 40); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = Sim.css('--muted'); ctx.font = `12px ${Sim.css('--mono')}`; ctx.textAlign = 'center'; ctx.fillText('x = 0', e, y0 + BLOCK / 2 + 56);
+      ctx.strokeStyle = Sim.css('--sim-ink'); ctx.lineWidth = 3;                                      // wall + floor
+      ctx.beginPath(); ctx.moveTo(WALL, y0 - 56); ctx.lineTo(WALL, y0 + 56); ctx.moveTo(WALL, y0 + BLOCK / 2); ctx.lineTo(w - 20, y0 + BLOCK / 2); ctx.stroke();
+      for (let xr = -XMAX; xr <= XMAX + 1e-9; xr += 0.1) {                                            // ruler ticks, every 0.1 m
+        const tx = e + xr * sc; ctx.strokeStyle = Sim.css('--sim-grid'); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(tx, y0 + BLOCK / 2); ctx.lineTo(tx, y0 + BLOCK / 2 + (Math.abs(Math.round(xr * 10) % 5) === 0 ? 14 : 8)); ctx.stroke();
+      }
+      // spring: coils get tighter as it is compressed
+      const x1 = bx - BLOCK / 2, n = 14;
+      ctx.strokeStyle = Sim.css('--text'); ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(WALL, y0);
+      for (let i = 0; i < n; i++) ctx.lineTo(WALL + (x1 - WALL) * (i + 0.5) / n, y0 + (i % 2 ? 16 : -16));
+      ctx.lineTo(x1, y0); ctx.stroke();
+      // block with soft shadow
+      ctx.save(); ctx.shadowColor = 'rgb(0 0 0 / .25)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+      const g = ctx.createLinearGradient(0, bt, 0, bt + BLOCK); g.addColorStop(0, Sim.css('--c1')); g.addColorStop(1, Sim.alpha(Sim.css('--c1'), .72));
+      ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(bx - BLOCK / 2, bt, BLOCK, BLOCK, 10); else ctx.rect(bx - BLOCK / 2, bt, BLOCK, BLOCK); ctx.fill(); ctx.restore();
+      if (!dragged) {
+        ctx.fillStyle = Sim.css('--muted'); ctx.font = `500 14px ${Sim.css('--font')}`; ctx.textAlign = 'center';
+        ctx.fillText('grab the block, pull, and let go', bx, bt - 58);
+      }
+      handles.draw(ctx);
+      ro.set('x', Sim.fmt(s.x, 3) + ' m'); ro.set('v', Sim.fmt(s.v, 3) + ' m/s');
+      ro.set('E', Sim.fmt(0.5 * m * s.v * s.v + 0.5 * k * s.x * s.x, 4) + ' J');
+    }
+  });
+  updateStatic(); tl.recompute();
+  Sim.playbar(document.getElementById('playbar'), tl);
+
+  const dock = Sim.graphDock(document.getElementById('graphdock'));
+  const KE = (s) => 0.5 * ctl.values.m * s.v * s.v, PE = (s) => 0.5 * ctl.values.k * s.x * s.x;
+  dock.timeGraph(tl, { title: 'Position x(t)', short: 'Position', icon: 'ph-ruler', yLabel: 'm', yUnit: 'm', symmetric: true, series: [{ name: 'x', color: '--c1', y: (s) => s.x }] });
+  dock.timeGraph(tl, { title: 'Energy', short: 'Energy', icon: 'ph-lightning', yLabel: 'J', yUnit: 'J', yMin: 0,
+    series: [{ name: 'kinetic', color: '--c3', y: KE }, { name: 'spring', color: '--c1', y: PE }, { name: 'total', color: '--c5', y: (s) => KE(s) + PE(s), fill: false }] });
+  dock.timeGraph(tl, { title: 'Velocity v(t)', short: 'Velocity', icon: 'ph-arrow-up-right', yLabel: 'm/s', yUnit: 'm/s', symmetric: true, visible: false, series: [{ name: 'v', color: '--c2', y: (s) => s.v }] });
+  dock.timeGraph(tl, { title: 'Phase portrait v(x)', short: 'Phase', icon: 'ph-spiral', xy: true, xLabel: 'x (m)', yLabel: 'v (m/s)', symmetric: true, visible: false,
+    series: [{ name: 'v vs x', color: '--c4', x: (s) => s.x, y: (s) => s.v }] });
+  dock.timeGraph(tl, { title: 'Forces', short: 'Forces', icon: 'ph-arrows-left-right', yLabel: 'N', yUnit: 'N', symmetric: true, visible: false,
+    series: [{ name: 'spring −kx', color: '--c1', y: (s) => -ctl.values.k * s.x }, { name: 'damping −bv', color: '--c3', y: (s) => -ctl.values.b * s.v },
+             { name: 'net', color: '--c5', y: (s) => -ctl.values.k * s.x - ctl.values.b * s.v, fill: false, dash: [5, 4] }] });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projectile Motion</title>
+<script>/* apply saved theme before first paint (no flash) */(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="../css/site.css">
+<script src="../js/site.js" defer></script>
+<script src="../js/sim.js" defer></script>
+<!-- Catalog metadata, read by site_tools.py (index) and site.js (title).
+     topic: mechanics|waves|optics|electricity|magnetism|thermodynamics|fluids|modern|astronomy   level: high-school|intro-uni -->
+<script type="application/json" id="demo-meta">
+{
+  "id": "projectile-motion",
+  "title": "Projectile Motion",
+  "summary": "Drag the arrow to aim, release to launch. See how angle, speed and gravity shape the path, velocity and energy.",
+  "topic": "mechanics",
+  "level": "high-school",
+  "order": 10
+}
+</script>
+</head>
+<body class="demo">
+
+<!-- ALL explanation lives here. It opens in a lightbox from the "Read more" button; the page itself is only the demo.
+     Each <section> becomes a tab (data-title, data-icon = Phosphor icon class). -->
+<div id="more" hidden>
+  <section data-title="Predict first" data-icon="ph-question">
+    <p class="predict-q">Ignoring air resistance, which launch angle sends the ball farthest? Is there another angle that lands at the same spot as 30°?</p>
+    <details class="reveal"><summary>Show the answer</summary>
+      <p>45° gives the maximum range. Angles that add up to 90° (30° and 60°) land at the same spot.</p></details>
+  </section>
+  <section data-title="What to notice" data-icon="ph-eye">
+    <ul>
+      <li>The horizontal velocity never changes during the flight (the amber line is flat in the velocity graph).</li>
+      <li>The vertical velocity falls at a steady rate $g$, is zero at the top, then points downward.</li>
+      <li>Kinetic and potential energy trade places, but their sum stays constant. Change the mass: the path stays the same, only the energies scale.</li>
+    </ul>
+    <div class="callout misconception"><strong>Common mistake.</strong> At the top of the path the acceleration is not zero. Only the vertical <em>velocity</em> is zero; the acceleration is still $g$, pointing down.</div>
+  </section>
+  <section data-title="The physics" data-icon="ph-function">
+    <p>Horizontal and vertical motion are independent. With launch speed $v_0$, angle $\theta$ and gravity $g$:</p>
+    $$x(t)=v_0\cos\theta\,t,\qquad y(t)=v_0\sin\theta\,t-\tfrac12 g t^2,\qquad R=\frac{v_0^2\sin 2\theta}{g}$$
+    <p>Since $\sin 2\theta$ is largest at $\theta=45^\circ$, that angle gives the longest range on level ground.</p>
+  </section>
+  <section data-title="Try this" data-icon="ph-flag">
+    <ol>
+      <li>Find two different angles with the same range, then drag the timeline to compare their heights at the same moment.</li>
+      <li>Switch to the Moon. What happens to the range and the flight time?</li>
+      <li>Open the Energy graph and change the mass. What changes, and what does not?</li>
+    </ol>
+  </section>
+</div>
+
+<div class="app">
+  <!-- Settings dock (left): precise sliders, the keyboard-friendly twin of what you can drag on the stage -->
+  <aside class="dock left" id="settings" data-dock="settings" data-label="Settings" data-icon="ph-sliders-horizontal" data-open="false">
+    <div class="dock-head"><h3>Settings</h3></div>
+    <div class="dock-body"><div id="controls"></div><p class="ctl-hint">Tip: you can also drag the arrow on the stage.</p></div>
+  </aside>
+
+  <section class="stage-wrap">
+    <div class="stage" role="img" aria-label="Projectile launch: drag the arrow to set speed and angle">
+      <canvas id="stage"></canvas>
+      <div id="readouts" class="stage-readouts"></div>
+      <div id="tools" class="stage-tools"></div>
+    </div>
+    <div id="playbar"></div>
+  </section>
+
+  <!-- Graph dock (right): every graph hides behind this side menu -->
+  <aside class="dock right" id="graphdock" data-dock="graphs" data-label="Graphs" data-icon="ph-chart-line-up" data-open="true"></aside>
+</div>
+
+<script>
+/* Pattern: direct manipulation (handles) + settings -> tl.recompute() -> stage, readouts and graphs all follow. */
+document.addEventListener('DOMContentLoaded', () => {
+  const { Sim } = window;
+  const ORX = 72, BOT = 76;             // launch point: px from the left / from the bottom of the stage
+  let tl = null;                        // declared first: callbacks can fire before the timeline exists
+  const view = { scale: 1 };
+  let dragged = false;                  // hide the "drag me" hint after the first interaction
+
+  const cv = Sim.canvas(document.getElementById('stage'), { onResize: () => { if (tl) { fitView(); tl.redraw(); } } });
+
+  const ctl = Sim.controls(document.getElementById('controls'), [
+    { type: 'slider', id: 'angle', label: 'Angle', min: 5, max: 85, step: 1, value: 45, unit: '°' },
+    { type: 'slider', id: 'speed', label: 'Launch speed', min: 5, max: 40, step: 1, value: 25, unit: 'm/s' },
+    { type: 'slider', id: 'mass', label: 'Mass', min: 0.1, max: 5, step: 0.1, value: 1, unit: 'kg' },
+    { type: 'select', id: 'g', label: 'Gravity', value: '9.81', options: [
+      { value: '9.81', label: 'Earth' }, { value: '1.62', label: 'Moon' }, { value: '3.71', label: 'Mars' }, { value: '24.79', label: 'Jupiter' }] },
+    { type: 'heading', label: 'Display' },
+    { type: 'toggle', id: 'comps', label: 'Velocity components', value: true },
+    { type: 'toggle', id: 'strobe', label: 'Position every 0.25 s', value: true }
+  ], () => { tools.refresh(); fitView(); tl.recompute(); });         // ANY parameter change recomputes the whole run
+
+  const tools = Sim.toolbar(document.getElementById('tools'), [
+    { type: 'segment', label: 'Gravity', value: () => ctl.values.g, onChange: (v) => { ctl.set('g', v); fitView(); tl.recompute(); },
+      options: [{ value: '9.81', label: 'Earth' }, { value: '1.62', label: 'Moon' }, { value: '3.71', label: 'Mars' }, { value: '24.79', label: 'Jupiter' }] }
+  ]);
+
+  const ro = Sim.readouts(document.getElementById('readouts'), [
+    { id: 't', label: 'Time' }, { id: 'x', label: 'Distance' }, { id: 'y', label: 'Height' }, { id: 'v', label: 'Speed' },
+    { id: 'R', label: 'Range' }, { id: 'H', label: 'Max height' }
+  ]);
+
+  const P = () => {                      // parameters in SI units
+    const th = ctl.values.angle * Math.PI / 180, v0 = ctl.values.speed;
+    return { g: +ctl.values.g, m: ctl.values.mass, vx0: v0 * Math.cos(th), vy0: v0 * Math.sin(th) };
+  };
+  const KPX = () => Sim.clamp(cv.h * 0.011, 3.5, 9);                // px per m/s for the launch arrow (independent of the world scale)
+  function fitView() {                   // fit the world (meters) so the whole flight is visible
+    const { g, vx0, vy0 } = P(), T = 2 * vy0 / g;
+    view.scale = Math.min((cv.w - ORX - 40) / Math.max(vx0 * T * 1.1, 20), (cv.h - BOT - 40) / Math.max(vy0 * vy0 / (2 * g) * 1.3, 8));
+  }
+
+  /* THE launch arrow: drag its tip. Angle snaps near multiples of 15°; releasing launches. */
+  const handles = Sim.handles(cv, [{
+    id: 'launch', color: '--c1', radius: 14,
+    pos: () => { const { vx0, vy0 } = P(); return [ORX + vx0 * KPX(), cv.h - BOT - vy0 * KPX()]; },
+    label: () => `${ctl.values.speed.toFixed(0)} m/s · ${ctl.values.angle.toFixed(0)}°`,
+    onStart: () => { tl.pause(); dragged = true; },
+    onDrag: (x, y) => {
+      const dx = Math.max(x - ORX, 1), dy = Math.max(cv.h - BOT - y, 1);
+      ctl.set('speed', Sim.clamp(Math.round(Math.hypot(dx, dy) / KPX()), 5, 40));
+      ctl.set('angle', Math.round(Sim.clamp(Sim.snap(Math.atan2(dy, dx) * 180 / Math.PI, 15, 2), 5, 85)));
+      fitView(); tl.recompute(); tl.seek(0);
+    },
+    onEnd: () => tl.play()               // let go = launch
+  }], { redraw: () => tl.redraw() });
+
+  /* ANALYTIC timeline: state is an exact function of t. (For ODEs without a closed form, give init/step instead; see the spring example.) */
+  tl = Sim.timeline({
+    duration: () => 2 * P().vy0 / P().g,                       // flight time on level ground
+    at: (t) => {
+      const { g, m, vx0, vy0 } = P(), vy = vy0 - g * t, y = vy0 * t - 0.5 * g * t * t, ke = 0.5 * m * (vx0 * vx0 + vy * vy), pe = m * g * y;
+      return { x: vx0 * t, y, vx: vx0, vy, speed: Math.hypot(vx0, vy), ke, pe, e: ke + pe };
+    },
+    draw: (s, t) => {
+      const { ctx, w, h } = cv, { g, vx0, vy0 } = P(), T = tl ? tl.duration : 2 * vy0 / g, GY = h - BOT, k = KPX();
+      const px = (x) => ORX + x * view.scale, py = (y) => GY - y * view.scale;
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = Sim.css('--sim-ink'); ctx.lineWidth = 2;                       // ground
+      ctx.beginPath(); ctx.moveTo(0, GY); ctx.lineTo(w, GY); ctx.stroke();
+      ctx.strokeStyle = Sim.alpha(Sim.css('--c1'), .4); ctx.lineWidth = 2.5; ctx.setLineDash([2, 6]); ctx.lineCap = 'round';   // whole path, faint
+      ctx.beginPath();
+      for (let i = 0; i <= 160; i++) { const tt = T * i / 160; i ? ctx.lineTo(px(vx0 * tt), py(vy0 * tt - 0.5 * g * tt * tt)) : ctx.moveTo(px(0), py(0)); }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (ctl.values.strobe) {                                                          // equal time steps -> equal x spacing
+        ctx.fillStyle = Sim.alpha(Sim.css('--c1'), .55);
+        for (let tt = 0; tt <= T + 1e-9; tt += 0.25) { ctx.beginPath(); ctx.arc(px(vx0 * tt), py(vy0 * tt - 0.5 * g * tt * tt), 3.5, 0, Sim.TAU); ctx.fill(); }
+      }
+      // launch arrow + angle arc (this is what you drag)
+      const tipx = ORX + vx0 * k, tipy = GY - vy0 * k, th = Math.atan2(vy0, vx0);
+      ctx.strokeStyle = Sim.alpha(Sim.css('--muted'), .6); ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(ORX, GY); ctx.lineTo(ORX + 130, GY); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = Sim.css('--c1'); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(ORX, GY, 56, -th, 0); ctx.stroke();
+      Sim.arrow(ctx, ORX, GY, tipx, tipy, { color: Sim.alpha(Sim.css('--c1'), .85), width: 4, head: 14 });
+      if (!dragged) {
+        const msg = 'drag to aim, let go to launch';
+        ctx.fillStyle = Sim.css('--muted'); ctx.font = `500 14px ${Sim.css('--font')}`; ctx.textBaseline = 'middle';
+        const right = tipx + 26 + ctx.measureText(msg).width < w - 8;                    // keep the hint on screen
+        ctx.textAlign = right ? 'left' : 'right'; ctx.fillText(msg, right ? tipx + 26 : tipx - 26, tipy - 4);
+      }
+      // the ball with its instantaneous velocity
+      const bx = px(s.x), by = py(s.y);
+      if (t > 0) {
+        if (ctl.values.comps) {
+          Sim.arrow(ctx, bx, by, bx + s.vx * k, by, { color: Sim.css('--c3'), width: 2.5 });
+          Sim.arrow(ctx, bx, by, bx, by - s.vy * k, { color: Sim.css('--c2'), width: 2.5 });
+        }
+        Sim.arrow(ctx, bx, by, bx + s.vx * k, by - s.vy * k, { color: Sim.css('--text'), width: 2.5 });
+      }
+      const gr = ctx.createRadialGradient(bx, by, 2, bx, by, 24);
+      gr.addColorStop(0, Sim.alpha(Sim.css('--c1'), .4)); gr.addColorStop(1, Sim.alpha(Sim.css('--c1'), 0));
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(bx, by, 24, 0, Sim.TAU); ctx.fill();
+      ctx.fillStyle = Sim.css('--sim-ink'); ctx.beginPath(); ctx.arc(bx, by, 8, 0, Sim.TAU); ctx.fill();
+      ctx.strokeStyle = Sim.css('--surface'); ctx.lineWidth = 2; ctx.stroke();
+      handles.draw(ctx);                                                                // handles go on top
+      ro.set('t', Sim.fmt(t) + ' s'); ro.set('x', Sim.fmt(s.x, 1) + ' m'); ro.set('y', Sim.fmt(s.y, 1) + ' m'); ro.set('v', Sim.fmt(s.speed, 1) + ' m/s');
+      ro.set('R', Sim.fmt(vx0 * T, 1) + ' m'); ro.set('H', Sim.fmt(vy0 * vy0 / (2 * g), 1) + ' m');
+    }
+  });
+  fitView(); tl.recompute();
+  Sim.playbar(document.getElementById('playbar'), tl);
+
+  /* Graphs live in the side menu. The first two start visible; each has a chip in the menu to show/hide it. */
+  const dock = Sim.graphDock(document.getElementById('graphdock'));
+  dock.timeGraph(tl, { title: 'Velocity vs time', short: 'Velocity', icon: 'ph-arrow-up-right', yLabel: 'm/s', yUnit: 'm/s',
+    series: [{ name: 'vx', color: '--c3', y: (s) => s.vx }, { name: 'vy', color: '--c2', y: (s) => s.vy }, { name: 'speed', color: '--c1', y: (s) => s.speed, dash: [5, 4], fill: false }] });
+  dock.timeGraph(tl, { title: 'Energy vs time', short: 'Energy', icon: 'ph-lightning', yLabel: 'J', yUnit: 'J', yMin: 0,
+    series: [{ name: 'kinetic', color: '--c3', y: (s) => s.ke }, { name: 'potential', color: '--c2', y: (s) => s.pe }, { name: 'total', color: '--c5', y: (s) => s.e, fill: false }] });
+  dock.timeGraph(tl, { title: 'Position vs time', short: 'Position', icon: 'ph-ruler', yLabel: 'm', yUnit: 'm', visible: false,
+    series: [{ name: 'x', color: '--c3', y: (s) => s.x }, { name: 'y', color: '--c1', y: (s) => s.y }] });
+  dock.timeGraph(tl, { title: 'Trajectory y(x)', short: 'Path', icon: 'ph-path', xy: true, xLabel: 'x (m)', yLabel: 'y (m)', visible: false,
+    series: [{ name: 'path', color: '--c1', x: (s) => s.x, y: (s) => s.y }] });
+});
+</script>
+</body>
+</html>

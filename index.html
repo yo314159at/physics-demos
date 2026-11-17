@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics Playground</title>
+<script>/* apply saved theme before first paint (no flash) */(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}})()</script>
+<link rel="stylesheet" href="css/site.css">
+<script src="js/site.js" defer></script>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <h1>Physics, you can touch</h1>
+    <p class="lead">Small interactive demos. Predict what will happen, change the parameters, scrub through time, then see why.</p>
+  </section>
+  <div class="chips" role="group" aria-label="Topics"></div>
+  <div class="catalog">
+<!-- DEMOS:START -->
+    <a class="card card-link" href="demos/projectile-motion.html" data-topic="mechanics" data-level="high-school">
+      <h3>Projectile Motion</h3>
+      <p>Drag the arrow to aim, release to launch. See how angle, speed and gravity shape the path, velocity and energy.</p>
+      <div class="meta"><span class="tag topic-label">Mechanics</span><span class="tag">High school</span></div>
+    </a>
+    <a class="card card-link" href="demos/spring-mass.html" data-topic="mechanics" data-level="high-school">
+      <h3>Mass on a Spring</h3>
+      <p>Grab the block, pull, let go. Watch energy swap between motion and spring, and the phase portrait spiral in with damping.</p>
+      <div class="meta"><span class="tag topic-label">Mechanics</span><span class="tag">High school</span></div>
+    </a>
+    <a class="card card-link" href="demos/waves.html" data-topic="waves" data-level="high-school">
+      <h3>Waves and Superposition</h3>
+      <p>Drag a wave&#x27;s amplitude and wavelength, add a second wave, probe ψ(x₀, t) and ψ(x, t₀). Standing waves and beats in one tap.</p>
+      <div class="meta"><span class="tag topic-label">Waves</span><span class="tag">High school</span></div>
+    </a>
+<!-- DEMOS:END -->
+  </div>
+</main>
+</body>
+</html>
