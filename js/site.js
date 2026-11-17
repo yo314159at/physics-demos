@@ -6,8 +6,8 @@
   'use strict';
 
   const CONFIG = {
-    siteTitle: 'Physics Playground',
-    footer: 'Interactive physics demos for the classroom.',
+    siteTitle: 'Physics Demos',
+    footer: '(Likely spaghetti) coded by AI',
     katexVersion: '0.16.11',
     phosphorVersion: '2.1.1',
     fonts: 'https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sora:wght@500;600&display=swap'
