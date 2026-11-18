@@ -7,6 +7,7 @@
 <script>/* apply saved theme before first paint (no flash) */(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}})()</script>
 <link rel="stylesheet" href="css/site.css">
 <script src="js/site.js" defer></script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
 <main>
@@ -32,8 +33,14 @@
       <p>Drag a wave&#x27;s amplitude and wavelength, add a second wave, probe ψ(x₀, t) and ψ(x, t₀). Standing waves and beats in one tap.</p>
       <div class="meta"><span class="tag topic-label">Waves</span><span class="tag">High school</span></div>
     </a>
+    <a class="card card-link" href="demos/van-de-graaff.html" data-topic="electricity" data-level="high-school">
+      <h3>Van de Graaff Generator</h3>
+      <p>Drag the discharge wand to set the spark gap, resize the dome to change capacitance. Watch charge build, leak in humid air and spark.</p>
+      <div class="meta"><span class="tag topic-label">Electricity</span><span class="tag">High school</span></div>
+    </a>
 <!-- DEMOS:END -->
   </div>
 </main>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>

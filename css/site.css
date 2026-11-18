@@ -117,7 +117,9 @@ i.ph, i.ph-fill, i.ph-bold { line-height: 1; vertical-align: -.125em; }
 .site-header .spacer { flex: 1; }
 .header-actions { display: flex; gap: .4rem; }
 @media (max-width: 760px) { .header-actions .lbl, .brand .brand-name { display: none; } }
-.site-footer { margin-block-start: 4rem; padding: 2rem 1rem; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--border); text-align: center; }
+.site-footer { margin-block-start: 4rem; padding: 2rem 1rem; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; text-align: center; }
+.footer-repo { color: inherit; display: inline-flex; align-items: center; font-size: 1.2rem; text-decoration: none; transition: color .12s; }
+.footer-repo:hover { color: var(--accent); }
 main { max-inline-size: 76rem; margin-inline: auto; padding: 1rem clamp(1rem, 4vw, 2rem) 0; }
 
 /* ---------- demo page: one full-viewport app, no page scrolling ---------- */

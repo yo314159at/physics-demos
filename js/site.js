@@ -8,6 +8,7 @@
   const CONFIG = {
     siteTitle: 'Physics Demos',
     footer: '(Likely spaghetti) coded by AI',
+    repoUrl: 'https://github.com/yo314159at/physics-demos',
     katexVersion: '0.16.11',
     phosphorVersion: '2.1.1',
     fonts: 'https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Sora:wght@500;600&display=swap'
@@ -159,7 +160,8 @@
     } else {
       const footer = document.createElement('footer');
       footer.className = 'site-footer';
-      footer.textContent = CONFIG.footer;
+      footer.innerHTML = `<span>${esc(CONFIG.footer)}</span>` +
+        (CONFIG.repoUrl ? `<a class="footer-repo" href="${esc(CONFIG.repoUrl)}" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="View on GitHub"><i class="ph ph-github-logo" aria-hidden="true"></i></a>` : '');
       document.body.append(footer);
     }
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);

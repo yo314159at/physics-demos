@@ -105,9 +105,11 @@
     const changeFns = [], playFns = [];
     const api = { speed: 1, loop: false };
 
-    const state = () => numeric
-      ? samples[Math.min(samples.length - 1, Math.round(t / (dt0 * every)))].s
-      : o.at(t);
+    const state = () => {
+      if (!numeric) return o.at(t);
+      const idx = clamp(Math.round(t / (dt0 * every)) || 0, 0, samples.length - 1);
+      return samples[idx].s;
+    };
     function notify(kind) {
       if (o.draw) o.draw(state(), t);
       changeFns.forEach((fn) => fn(kind));
@@ -137,7 +139,7 @@
     }
     function frame(now) {
       if (!playing) return;
-      t += Math.min(0.1, (now - last) / 1000) * api.speed; last = now;
+      t += Math.max(0, Math.min(0.1, (now - last) / 1000)) * api.speed; last = now;
       if (t >= duration) {
         if (api.loop) t = t % duration; else { t = duration; pause(); }
       }
@@ -162,7 +164,7 @@
     Object.assign(api, {
       state, recompute, play, pause,
       toggle() { playing ? pause() : play(); },
-      seek(x) { t = clamp(x, 0, duration); notify('time'); },
+      seek(x) { if (!Number.isFinite(x)) return; t = clamp(x, 0, duration); notify('time'); },
       redraw() { if (o.draw) o.draw(state(), t); },            // stage only (e.g. while a handle is hovered)
       onChange(fn) { changeFns.push(fn); },
       onPlay(fn) { playFns.push(fn); }
@@ -258,13 +260,16 @@
         if (s.fill !== false && !xy) {
           let ymin = Infinity, ymax = -Infinity; for (const p of pts) { if (p[1] < ymin) ymin = p[1]; if (p[1] > ymax) ymax = p[1]; }
           const base = Y(clamp(0, y0, y1)), gTop = Math.min(Y(ymax), base), gBot = Math.max(Y(ymin), base);
-          const b = gBot - gTop < 1 ? 1 : (base - gTop) / (gBot - gTop);
-          const g = ctx.createLinearGradient(0, gTop, 0, gBot + (gBot - gTop < 1 ? 1 : 0));
-          g.addColorStop(0, alpha(c, b <= 0 ? 0 : 0.28));
-          if (b > 0 && b < 1) g.addColorStop(b, alpha(c, 0));
-          g.addColorStop(1, alpha(c, b >= 1 ? 0 : 0.28));
-          path(); ctx.lineTo(X(pts[pts.length - 1][0]), base); ctx.lineTo(X(pts[0][0]), base); ctx.closePath();
-          ctx.fillStyle = g; ctx.fill();
+          if (Number.isFinite(gTop) && Number.isFinite(gBot)) {
+            const span = gBot - gTop;
+            const b = clamp(span < 1 ? 1 : (base - gTop) / span, 0, 1);
+            const g = ctx.createLinearGradient(0, gTop, 0, gBot + (span < 1 ? 1 : 0));
+            g.addColorStop(0, alpha(c, b <= 0 ? 0 : 0.28));
+            if (b > 0 && b < 1) g.addColorStop(b, alpha(c, 0));
+            g.addColorStop(1, alpha(c, b >= 1 ? 0 : 0.28));
+            path(); ctx.lineTo(X(pts[pts.length - 1][0]), base); ctx.lineTo(X(pts[0][0]), base); ctx.closePath();
+            ctx.fillStyle = g; ctx.fill();
+          }
         }
         path(); ctx.strokeStyle = c; ctx.lineWidth = s.width || 2; ctx.lineJoin = 'round'; ctx.setLineDash(s.dash || []); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -295,17 +300,18 @@
     }
 
     const xOf = (e) => {
+      if (!view || view.iw <= 0) return view ? view.x0 : 0;
       const r = el.getBoundingClientRect();
       return clamp(view.x0 + (e.clientX - r.left - pad.l) / view.iw * (view.x1 - view.x0), view.x0, view.x1);
     };
     function showTip(e) {
-      if (!view) return;
+      if (!view || hoverX === null) return;
       const x = hoverX, rows = view.vis.map((q) =>
         `<div><span class="dot" style="background:${q.c}"></span>${Site.esc(q.s.name)}: ${fmt(valueAt(q.pts, x), 3)}${(q.s.unit ?? o.yUnit) ? '\u00a0' + Site.esc(q.s.unit ?? o.yUnit) : ''}</div>`).join('');
       tip.innerHTML = `<div class="gx">${Site.esc(o.xName || 'x')} = ${fmt(x, 2)}${o.xUnit ? '\u00a0' + Site.esc(o.xUnit) : ''}</div>${rows}`;
       tip.hidden = false;
       const px = e.clientX - body.getBoundingClientRect().left;
-      tip.style.left = clamp(px + 14, 4, body.clientWidth - tip.offsetWidth - 4) + 'px';
+      tip.style.left = clamp(px + 14, 4, Math.max(4, body.clientWidth - tip.offsetWidth - 4)) + 'px';
     }
     if (!xy) {
       el.addEventListener('pointermove', (e) => {
@@ -314,11 +320,14 @@
         if (dragging && o.onScrub) o.onScrub(hoverX); else draw();
       });
       el.addEventListener('pointerdown', (e) => {
-        if (!o.onScrub || !view) return;
-        dragging = true; el.setPointerCapture(e.pointerId); o.onScrub(xOf(e));
+        if (!o.onScrub || !view || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        dragging = true;
+        try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+        hoverX = xOf(e); showTip(e);
+        o.onScrub(hoverX);
       });
       const up = () => { dragging = false; };
-      el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
       el.addEventListener('pointerleave', () => { if (dragging) return; hoverX = null; tip.hidden = true; draw(); });
     }
     return { draw, canvas: cv };
@@ -480,33 +489,47 @@
   function playbar(container, tl, { speeds = [0.25, 0.5, 1, 2] } = {}) {
     container.classList.add('playbar');
     container.innerHTML =
-      '<button type="button" class="btn primary icon" data-r="play"></button>' +
+      '<button type="button" class="btn primary icon" data-r="play"><i class="ph-fill ph-play" aria-hidden="true"></i></button>' +
       '<button type="button" class="btn icon" data-r="restart" aria-label="Restart (R)" title="Restart (R)"><i class="ph ph-arrow-counter-clockwise"></i></button>' +
-      '<input class="scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Timeline">' +
+      '<input class="scrub" type="range" min="0" max="1000" step="any" value="0" aria-label="Timeline">' +
       '<span class="tlabel"></span>' +
       '<select aria-label="Playback speed" title="Playback speed"></select>' +
       '<button type="button" class="btn icon" data-r="loop" aria-label="Loop" title="Loop" aria-pressed="false"><i class="ph ph-repeat"></i></button>';
-    const play = container.querySelector('[data-r=play]'), restart = container.querySelector('[data-r=restart]');
+    const play = container.querySelector('[data-r=play]'), playIcon = play.querySelector('i');
+    const restart = container.querySelector('[data-r=restart]');
     const loop = container.querySelector('[data-r=loop]'), scrub = container.querySelector('.scrub');
     const label = container.querySelector('.tlabel'), sel = container.querySelector('select');
     speeds.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = '×' + v; sel.append(o); });
     sel.value = String(tl.speed);
+    let lastPlaying = null, scrubbing = false;
     const sync = () => {
-      play.innerHTML = `<i class="ph-fill ph-${tl.playing ? 'pause' : 'play'}"></i>`;
-      play.setAttribute('aria-label', tl.playing ? 'Pause (Space)' : 'Play (Space)'); play.title = play.getAttribute('aria-label');
-      scrub.value = 1000 * tl.t / tl.duration; setFill(scrub);
+      if (lastPlaying !== tl.playing) {
+        lastPlaying = tl.playing;
+        playIcon.className = `ph-fill ph-${tl.playing ? 'pause' : 'play'}`;
+        play.setAttribute('aria-label', tl.playing ? 'Pause (Space)' : 'Play (Space)');
+        play.title = play.getAttribute('aria-label');
+      }
+      if (!scrubbing) scrub.value = 1000 * tl.t / tl.duration;
+      setFill(scrub);
       label.textContent = `${fmt(tl.t, 2)} / ${fmt(tl.duration, 2)} s`;
     };
     play.addEventListener('click', () => tl.toggle());
     restart.addEventListener('click', () => { tl.pause(); tl.seek(0); });
+    scrub.addEventListener('pointerdown', () => { scrubbing = true; tl.pause(); });
+    const endScrub = () => { scrubbing = false; };
+    scrub.addEventListener('pointerup', endScrub);
+    scrub.addEventListener('pointercancel', endScrub);
+    scrub.addEventListener('change', endScrub);
     scrub.addEventListener('input', () => { tl.pause(); tl.seek(+scrub.value / 1000 * tl.duration); });
     sel.addEventListener('change', () => { tl.speed = +sel.value; });
     loop.addEventListener('click', () => { tl.loop = !tl.loop; loop.setAttribute('aria-pressed', String(tl.loop)); });
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
-      const tag = e.target.tagName, typing = /^(INPUT|SELECT|TEXTAREA)$/.test(tag);
+      const tag = e.target.tagName;
+      const isRange = tag === 'INPUT' && e.target.type === 'range';
+      const typing = (/^(INPUT|SELECT|TEXTAREA)$/.test(tag) && !isRange);
       if (e.code === 'Space' && !typing && tag !== 'BUTTON') { e.preventDefault(); tl.toggle(); }
-      else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !typing) {
+      else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !typing && !isRange) {
         e.preventDefault(); tl.pause(); tl.seek(tl.t + (e.key === 'ArrowRight' ? 1 : -1) * tl.duration * (e.shiftKey ? 0.1 : 0.01));
       } else if ((e.key === 'r' || e.key === 'R' || e.key === 'Home') && !typing) { tl.pause(); tl.seek(0); }
     });
@@ -579,8 +602,11 @@
       raf = requestAnimationFrame(tick);
     }
     el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       const [x, y] = local(e), h = hit(x, y); if (!h) return;
-      active = h; el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing';
+      active = h;
+      try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      el.style.cursor = 'grabbing';
       if (h.onStart) h.onStart(x, y, e);
       h.onDrag(x, y, e); e.preventDefault(); animate();
     });
@@ -596,7 +622,7 @@
       if (h.onEnd) h.onEnd(e);
       animate();
     };
-    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('lostpointercapture', end);
     el.addEventListener('pointerleave', () => { if (!active && hover) { hover = null; el.style.cursor = ''; animate(); } });
 
     function draw(ctx) {
@@ -635,7 +661,7 @@
     const emit = () => stateListeners.forEach((fn) => fn(running));
     function frame(now) {
       if (!running) return;
-      acc += Math.min(0.1, (now - last) / 1000) * speed; last = now;
+      acc += Math.max(0, Math.min(0.1, (now - last) / 1000)) * speed; last = now;
       let n = 0;
       while (acc >= dt && running && n < 4000) { step(dt, time); time += dt; acc -= dt; n++; }
       if (n >= 4000) acc = 0;
