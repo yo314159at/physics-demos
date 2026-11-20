@@ -515,7 +515,7 @@
     };
     play.addEventListener('click', () => tl.toggle());
     restart.addEventListener('click', () => { tl.pause(); tl.seek(0); });
-    ntListener('pointerdown', () => { scrubbing = true; tl.pause(); });
+    scrub.addEventListener('pointerdown', () => { scrubbing = true; tl.pause(); });
     const endScrub = () => { scrubbing = false; };
     scrub.addEventListener('pointerup', endScrub);
     scrub.addEventListener('pointercancel', endScrub);
