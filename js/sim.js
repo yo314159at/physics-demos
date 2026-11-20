@@ -515,12 +515,12 @@
     };
     play.addEventListener('click', () => tl.toggle());
     restart.addEventListener('click', () => { tl.pause(); tl.seek(0); });
-    scrub.addEventListener('pointerdown', () => { scrubbing = true; tl.pause(); });
+    ntListener('pointerdown', () => { scrubbing = true; tl.pause(); });
     const endScrub = () => { scrubbing = false; };
     scrub.addEventListener('pointerup', endScrub);
     scrub.addEventListener('pointercancel', endScrub);
     scrub.addEventListener('change', endScrub);
-    scrub.addEventListener('input', () => { tl.pause(); tl.seek(+scrub.value / 1000 * tl.duration); });
+    scrub.addEventListener('input', () => { const f = +scrub.value / 1000; tl.pause(); tl.seek(f * tl.duration); });
     sel.addEventListener('change', () => { tl.speed = +sel.value; });
     loop.addEventListener('click', () => { tl.loop = !tl.loop; loop.setAttribute('aria-pressed', String(tl.loop)); });
     document.addEventListener('keydown', (e) => {
