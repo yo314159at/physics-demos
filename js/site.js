@@ -122,24 +122,84 @@
   }
 
   /* ---------- chrome ---------- */
-  const brandHtml = (rootPath) =>
-    `<a class="brand" href="${esc(rootPath)}"><span class="brand-mark" aria-hidden="true"><i class="ph-fill ph-atom"></i></span><span class="brand-name">${esc(CONFIG.siteTitle)}</span></a>`;
+  const brandHtml = () =>
+    `<a class="brand" href="/" aria-label="${esc(CONFIG.siteTitle)} home"><span class="brand-mark" aria-hidden="true"><i class="ph-fill ph-atom"></i></span><span class="brand-name">${esc(CONFIG.siteTitle)}</span></a>`;
   const themeBtn = '<button class="btn icon" id="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Light / dark"><i class="ph ph-circle-half"></i></button>';
 
+  function initDemoSwitcher(header, metaData, rootPath) {
+    const trigger = header.querySelector('.breadcrumb-current');
+    const menu = header.querySelector('.breadcrumb-menu');
+    if (!trigger || !menu) return;
+
+    const close = () => {
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    };
+    const position = () => {
+      const rect = trigger.getBoundingClientRect();
+      const width = Math.min(288, window.innerWidth - 24);
+      const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2));
+      menu.style.width = `${width}px`;
+      menu.style.left = `${left}px`;
+      menu.style.top = `${rect.bottom + 7}px`;
+    };
+    trigger.addEventListener('click', () => {
+      if (!menu.hidden) { close(); return; }
+      position();
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      menu.querySelector('[role="menuitem"]')?.focus();
+    });
+    document.addEventListener('click', (e) => {
+      if (!header.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { close(); trigger.focus(); }
+    });
+    window.addEventListener('resize', () => { if (!menu.hidden) position(); });
+
+    const catalogUrl = rootPath ? rootPath + 'demos.html' : 'demos.html';
+    fetch(catalogUrl).then((r) => {
+      if (!r.ok) throw new Error('Could not load demo catalog');
+      return r.text();
+    }).then((html) => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const cards = [...doc.querySelectorAll('.card-link')];
+      menu.innerHTML = cards.map((card) => {
+        const title = card.querySelector('h3')?.textContent.trim() || '';
+        const href = card.getAttribute('href') || '';
+        const id = href.split('/').filter(Boolean).pop() || '';
+        let url = href;
+        if (location.protocol === 'file:') {
+          url = id ? '../demos/' + encodeURIComponent(id) + '.html' : href;
+        } else if (!url.startsWith('/') && !/^https?:/.test(url)) {
+          url = '/' + url.replace(/^\/+/, '');
+        }
+        const current = id === (metaData && metaData.id);
+        return `<a class="breadcrumb-menu-item${current ? ' current' : ''}" role="menuitem" href="${esc(url)}"${current ? ' aria-current="page"' : ''}><span>${esc(title)}</span>${current ? '<i class="ph ph-check" aria-hidden="true"></i>' : ''}</a>`;
+      }).join('');
+    }).catch(() => {
+      menu.innerHTML = '<span class="breadcrumb-menu-empty" role="menuitem" aria-disabled="true">Demo list unavailable</span>';
+    });
+  }
+
   function buildChrome() {
-    const rootPath = root.dataset.root || '';
     const isDemo = document.body.classList.contains('demo');
     const m = meta();
+    const rootPath = root.dataset.root || '';
     const header = document.createElement('header');
     header.className = 'site-header';
     if (isDemo) {
-      header.innerHTML = brandHtml(rootPath) + `<div class="title">${esc((m && m.title) || '')}</div><div class="header-actions"></div>`;
+      header.innerHTML = brandHtml() +
+        `<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/demos">Interactive Demos</a><i class="ph ph-caret-right" aria-hidden="true"></i><div class="breadcrumb-current-wrap"><button class="breadcrumb-current" type="button" aria-haspopup="menu" aria-expanded="false"><span aria-current="page">${esc((m && m.title) || '')}</span><i class="ph ph-caret-down" aria-hidden="true"></i></button><div class="breadcrumb-menu" role="menu" hidden></div></div></nav>` +
+        '<div class="header-actions"></div>';
     } else {
-      header.innerHTML = brandHtml(rootPath) + '<div class="spacer"></div>' + themeBtn;
+      header.innerHTML = brandHtml() + '<div class="spacer"></div>' + themeBtn;
     }
     document.body.prepend(header);
 
     if (isDemo) {
+      initDemoSwitcher(header, m, rootPath);
       const actions = header.querySelector('.header-actions');
       const mk = (icon, label, title) => {
         const b = document.createElement('button');
