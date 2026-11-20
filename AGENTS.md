@@ -46,7 +46,6 @@ Reference demos (read the closest one before writing anything new, then copy it)
 | `demos/projectile-motion.html` | analytic timeline | draggable launch arrow, release = launch, planet segment, 4 graphs, strobe dots |
 | `demos/spring-mass.html` | **numeric** timeline (RK4) | grab-and-release block, damping presets, phase portrait (xy graph), hidden Forces graph |
 | `demos/waves.html` | analytic timeline | many handles (amplitude bar, wavelength bracket, probes with snapping), preset segment (Single / Standing / Beats), spatial snapshot graphs (`graphCard`), cached envelope graph |
-| `demos/van-de-graaff.html` | later addition | electricity example with Dry / Humid air and field-line toggles; read it for a richer settings + graph layout |
 
 ---
 
