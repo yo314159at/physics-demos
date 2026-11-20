@@ -31,7 +31,8 @@ A collection of interactive physics demos for **classroom projection**, mostly h
 
 ```
 /
-├── index.html          catalog page; one <a class="card card-link"> per demo (see 4.5)
+├── index.html          project chooser
+├── demos.html          demo catalog; one <a class="card card-link"> per demo (see 4.5)
 ├── css/site.css        the whole theme: tokens, raised buttons, app layout, docks, lightbox, graph cards
 ├── js/site.js          window.Site: loads fonts + Phosphor icons, builds header/dock buttons/Read more lightbox, KaTeX, catalog filter
 ├── js/sim.js           window.Sim: timeline, handles, graph dock, controls, readouts, toolbar, playbar, helpers
@@ -128,10 +129,10 @@ Keep each tab to about one screen. Write for a teacher presenting to a room.
 
 ### 4.5 Register it in the catalog
 
-Add a card to `index.html` between `<!-- DEMOS:START -->` and `<!-- DEMOS:END -->` (inside `.catalog` if the markers are missing). Keep cards ordered by topic, then `order`. Copy the meta values exactly:
+Add a card to `demos.html` between `<!-- DEMOS:START -->` and `<!-- DEMOS:END -->` (inside `.catalog` if the markers are missing). Keep cards ordered by topic, then `order`. Copy the meta values exactly:
 
 ```html
-<a class="card card-link" href="demos/free-fall.html" data-topic="mechanics" data-level="high-school">
+<a class="card card-link" href="demos/free-fall" data-topic="mechanics" data-level="high-school">
   <h3>Free Fall</h3>
   <p>Drag the ball up, let go, and watch height, speed and energy against time.</p>
   <div class="meta"><span class="tag topic-label">Mechanics</span><span class="tag">High school</span></div>
@@ -431,7 +432,7 @@ Manual checklist:
 - [ ] At about 390×780: no horizontal scroll, docks slide over the stage, toolbar does not cover the readouts or handles.
 - [ ] Dark theme is readable (header toggle).
 - [ ] One number checked against a closed form (scrub to a known time and read the readouts).
-- [ ] `index.html` card added with correct topic, level and order.
+- [ ] `demos.html` card added with correct topic, level and order.
 
 Scripted check (Playwright for Python; works the same in Node):
 

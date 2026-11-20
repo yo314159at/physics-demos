@@ -123,7 +123,7 @@
 
   /* ---------- chrome ---------- */
   const brandHtml = (rootPath) =>
-    `<a class="brand" href="${esc(rootPath)}index.html"><span class="brand-mark" aria-hidden="true"><i class="ph-fill ph-atom"></i></span><span class="brand-name">${esc(CONFIG.siteTitle)}</span></a>`;
+    `<a class="brand" href="${esc(rootPath)}"><span class="brand-mark" aria-hidden="true"><i class="ph-fill ph-atom"></i></span><span class="brand-name">${esc(CONFIG.siteTitle)}</span></a>`;
   const themeBtn = '<button class="btn icon" id="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Light / dark"><i class="ph ph-circle-half"></i></button>';
 
   function buildChrome() {
